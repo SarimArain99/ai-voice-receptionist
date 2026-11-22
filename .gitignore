@@ -2,6 +2,7 @@ node_modules
 .next
 out
 .env*
+!.env.example
 shots
 *.muse-github-snapshot-sync.json
 *.muse-github-snapshot-sync.json.tmp-*

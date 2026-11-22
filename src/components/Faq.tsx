@@ -2,7 +2,7 @@ const faqs = [
   {
     question: "Does Sadaa answer real phone calls?",
     answer:
-      "Not in this demo. This page is a working browser demo — you can type or speak to Sadaa and watch it book an appointment. Real phone answering is the next phase, and the demo shows exactly how Sadaa talks to callers.",
+      "The browser demo on this page is live now — type or speak to Sadaa and watch it book an appointment. Real phone calls (Twilio) and WhatsApp replies are built and waiting on the phone number and WhatsApp accounts; they are not live yet.",
   },
   {
     question: "What happens after a call?",
