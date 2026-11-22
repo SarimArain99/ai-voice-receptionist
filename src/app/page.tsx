@@ -2,6 +2,7 @@ import Hero from "@/components/Hero";
 import LiveDemo from "@/components/LiveDemo";
 import HowItWorks from "@/components/HowItWorks";
 import DashboardPreview from "@/components/DashboardPreview";
+import Faq from "@/components/Faq";
 import Close from "@/components/Close";
 
 export default function Home() {
@@ -11,6 +12,7 @@ export default function Home() {
       <LiveDemo />
       <HowItWorks />
       <DashboardPreview />
+      <Faq />
       <Close />
     </>
   );

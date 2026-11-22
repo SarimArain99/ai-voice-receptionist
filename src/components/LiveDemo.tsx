@@ -4,12 +4,41 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   DEMO_BUSINESS,
   type DemoBooking,
+  type DemoCancelled,
   type DemoMessage,
   type DemoState,
   getReply,
 } from "@/lib/demo-engine";
 
 const STORAGE_KEY = "sadaa-demo-appointments";
+const APPOINTMENTS_CHANGED_EVENT = "sadaa-demo-appointments-changed";
+
+export type StoredDemoAppointment = DemoBooking & {
+  business: string;
+  demo: boolean;
+  savedAt: string;
+};
+
+function loadDemoAppointments(): StoredDemoAppointment[] {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as StoredDemoAppointment[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function storeDemoAppointments(list: StoredDemoAppointment[]) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  } catch {
+    // Ignore storage failures in restricted browser environments
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(APPOINTMENTS_CHANGED_EVENT));
+  }
+}
 
 const SUGGESTION_CHIPS = [
   "Book an appointment",
@@ -61,11 +90,8 @@ type WindowWithSpeech = Window & {
 
 function saveDemoAppointment(booking: DemoBooking): boolean {
   try {
-    const existingRaw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed: unknown = existingRaw ? JSON.parse(existingRaw) : [];
-    const list = Array.isArray(parsed) ? parsed : [];
     const next = [
-      ...list,
+      ...loadDemoAppointments(),
       {
         ...booking,
         business: DEMO_BUSINESS.name,
@@ -73,22 +99,46 @@ function saveDemoAppointment(booking: DemoBooking): boolean {
         savedAt: new Date().toISOString(),
       },
     ];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    storeDemoAppointments(next);
     return true;
   } catch {
     return false;
   }
 }
 
+function removeDemoAppointment(cancelled: DemoCancelled): boolean {
+  const list = loadDemoAppointments();
+  const kept = list.filter((item) => {
+    const sameName =
+      item.name.toLowerCase() === cancelled.name.toLowerCase();
+    const sameDay = item.day.toLowerCase() === cancelled.day.toLowerCase();
+    const sameService =
+      !cancelled.service ||
+      item.service.toLowerCase() === cancelled.service.toLowerCase();
+    return !(sameName && sameDay && sameService);
+  });
+  if (kept.length === list.length) return false;
+  storeDemoAppointments(kept);
+  return true;
+}
+
+type DemoNotice = { kind: "saved" | "cancelled"; text: string } | null;
+
 export default function LiveDemo() {
   const [messages, setMessages] = useState<DemoMessage[]>(INITIAL_MESSAGES);
   const [engineState, setEngineState] = useState<DemoState>(INITIAL_STATE);
   const [input, setInput] = useState("");
-  const [savedNotice, setSavedNotice] = useState(false);
+  const [notice, setNotice] = useState<DemoNotice>(null);
+  const [appointments, setAppointments] = useState<StoredDemoAppointment[]>(
+    []
+  );
 
   const [speechSupported, setSpeechSupported] = useState(false);
   const [speechChecked, setSpeechChecked] = useState(false);
+  const [voiceReplySupported, setVoiceReplySupported] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [micStarting, setMicStarting] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(true);
 
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -105,9 +155,17 @@ export default function LiveDemo() {
       win.SpeechRecognition || win.webkitSpeechRecognition
     );
     setSpeechSupported(supported);
+    setVoiceReplySupported("speechSynthesis" in window);
     setSpeechChecked(true);
+    setAppointments(loadDemoAppointments());
+
+    const refresh = () => setAppointments(loadDemoAppointments());
+    window.addEventListener(APPOINTMENTS_CHANGED_EVENT, refresh);
+    window.addEventListener("storage", refresh);
 
     return () => {
+      window.removeEventListener(APPOINTMENTS_CHANGED_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
       recognitionRef.current?.abort();
       if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
@@ -120,7 +178,7 @@ export default function LiveDemo() {
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [messages, savedNotice]);
+  }, [messages, notice]);
 
   function speakText(text: string) {
     if (!voiceRepliesEnabled || typeof window === "undefined") return;
@@ -151,9 +209,25 @@ export default function LiveDemo() {
 
     if (result.booked) {
       const saved = saveDemoAppointment(result.booked);
-      setSavedNotice(saved);
+      setNotice(
+        saved
+          ? { kind: "saved", text: "Saved to your demo appointments." }
+          : null
+      );
+      setAppointments(loadDemoAppointments());
+    } else if (result.cancelled) {
+      const removed = removeDemoAppointment(result.cancelled);
+      setNotice(
+        removed
+          ? {
+              kind: "cancelled",
+              text: `Removed from your demo appointments.`,
+            }
+          : null
+      );
+      setAppointments(loadDemoAppointments());
     } else {
-      setSavedNotice(false);
+      setNotice(null);
     }
 
     if (shouldSpeakReply) {
@@ -173,12 +247,33 @@ export default function LiveDemo() {
     sendMessage(chip, false);
   }
 
+  function cancelAppointmentFromList(booking: StoredDemoAppointment) {
+    const removed = removeDemoAppointment({
+      name: booking.name,
+      day: booking.day,
+      service: booking.service,
+    });
+    setAppointments(loadDemoAppointments());
+    if (removed) {
+      setNotice({
+        kind: "cancelled",
+        text: `Removed the ${booking.service} on ${booking.day} for ${booking.name} from your demo appointments.`,
+      });
+    }
+  }
+
   function handleToggleMic() {
-    if (!speechSupported) return;
+    if (!speechSupported) {
+      setMicError(
+        "Microphone voice input is not supported in this browser. Please type your message instead."
+      );
+      return;
+    }
 
     if (isListening) {
       recognitionRef.current?.stop();
       setIsListening(false);
+      setMicStarting(false);
       return;
     }
 
@@ -188,6 +283,9 @@ export default function LiveDemo() {
 
     if (!SpeechRecognitionAPI) {
       setSpeechSupported(false);
+      setMicError(
+        "Microphone voice input is not supported in this browser. Please type your message instead."
+      );
       return;
     }
 
@@ -196,7 +294,23 @@ export default function LiveDemo() {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
+    setMicError(null);
+    setMicStarting(true);
+    const startTimeout = window.setTimeout(() => {
+      setMicStarting((starting) => {
+        if (starting) {
+          setMicError(
+            "Waiting for microphone permission. Please allow microphone access, or type your message instead."
+          );
+        }
+        return starting;
+      });
+    }, 2500);
+
     recognition.onstart = () => {
+      window.clearTimeout(startTimeout);
+      setMicStarting(false);
+      setMicError(null);
       setIsListening(true);
     };
 
@@ -208,10 +322,17 @@ export default function LiveDemo() {
     };
 
     recognition.onerror = () => {
+      window.clearTimeout(startTimeout);
+      setMicStarting(false);
       setIsListening(false);
+      setMicError(
+        "Microphone is not available right now. Please check permission and try again, or type your message instead."
+      );
     };
 
     recognition.onend = () => {
+      window.clearTimeout(startTimeout);
+      setMicStarting(false);
       setIsListening(false);
     };
 
@@ -219,20 +340,27 @@ export default function LiveDemo() {
     try {
       recognition.start();
     } catch {
+      window.clearTimeout(startTimeout);
+      setMicStarting(false);
       setIsListening(false);
+      setMicError(
+        "Microphone could not start in this browser. Please type your message instead."
+      );
     }
   }
 
   function handleReset() {
     recognitionRef.current?.abort();
     setIsListening(false);
+    setMicStarting(false);
+    setMicError(null);
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
     stateRef.current = INITIAL_STATE;
     setEngineState(INITIAL_STATE);
     setMessages(INITIAL_MESSAGES);
-    setSavedNotice(false);
+    setNotice(null);
     setInput("");
   }
 
@@ -273,7 +401,7 @@ export default function LiveDemo() {
             </div>
 
             <div className="flex items-center gap-2">
-              {speechSupported && (
+              {voiceReplySupported && (
                 <button
                   type="button"
                   onClick={() => setVoiceRepliesEnabled((prev) => !prev)}
@@ -326,7 +454,7 @@ export default function LiveDemo() {
               );
             })}
 
-            {savedNotice && (
+            {notice && (
               <div
                 role="status"
                 className="flex items-center gap-2 rounded-xl border border-accent/25 bg-accent/10 px-3.5 py-2 text-xs font-medium text-accent"
@@ -345,7 +473,7 @@ export default function LiveDemo() {
                     strokeLinejoin="round"
                   />
                 </svg>
-                <span>Saved to your demo appointments.</span>
+                <span>{notice.text}</span>
               </div>
             )}
           </div>
@@ -373,7 +501,6 @@ export default function LiveDemo() {
               <button
                 type="button"
                 onClick={handleToggleMic}
-                disabled={!speechSupported}
                 aria-label={
                   isListening ? "Stop voice input" : "Start voice input"
                 }
@@ -386,11 +513,9 @@ export default function LiveDemo() {
                     : "Voice input is not supported in this browser"
                 }
                 className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-                  !speechSupported
-                    ? "cursor-not-allowed border-ink/10 bg-ink/5 text-muted/60"
-                    : isListening
-                      ? "border-accent bg-accent text-accent-ink"
-                      : "border-ink/15 bg-paper text-ink hover:border-accent hover:text-accent"
+                  isListening || micStarting
+                    ? "border-accent bg-accent text-accent-ink"
+                    : "border-ink/15 bg-paper text-ink hover:border-accent hover:text-accent"
                 }`}
               >
                 <svg
@@ -426,7 +551,9 @@ export default function LiveDemo() {
                 placeholder={
                   isListening
                     ? "Listening..."
-                    : "Type a message for the demo clinic..."
+                    : micStarting
+                      ? "Starting microphone..."
+                      : "Type a message to the demo receptionist..."
                 }
                 className="h-11 flex-1 rounded-xl border border-ink/15 bg-paper px-3.5 text-sm text-ink placeholder:text-muted focus:border-accent"
               />
@@ -447,6 +574,18 @@ export default function LiveDemo() {
               </p>
             )}
 
+            {micError && (
+              <p role="alert" className="mt-2 text-xs font-medium text-accent">
+                {micError}
+              </p>
+            )}
+
+            {micStarting && !micError && (
+              <p className="mt-2 text-xs font-medium text-accent">
+                Starting microphone. Please allow access when your browser asks.
+              </p>
+            )}
+
             {isListening && (
               <p className="mt-2 text-xs font-medium text-accent">
                 Listening for your voice. Speak now or click the microphone to
@@ -454,6 +593,58 @@ export default function LiveDemo() {
               </p>
             )}
           </form>
+        </div>
+
+        <div className="mt-6 overflow-hidden rounded-2xl border border-ink/15 bg-paper shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink/10 bg-ink/5 px-4 py-3.5 sm:px-5">
+            <div>
+              <h3 className="text-sm font-semibold text-ink">
+                Your demo appointments
+              </h3>
+              <p className="text-xs text-muted">
+                Bookings you make in this demo, saved in your browser only.
+              </p>
+            </div>
+            <span className="rounded-full border border-ink/10 bg-ink/5 px-2.5 py-0.5 text-xs text-muted">
+              Demo data
+            </span>
+          </div>
+
+          {appointments.length === 0 ? (
+            <p className="px-4 py-5 text-sm leading-relaxed text-muted sm:px-5">
+              No demo appointments yet. Book one in the chat above and it will
+              show up here.
+            </p>
+          ) : (
+            <ul>
+              {appointments.map((booking, index) => (
+                <li
+                  key={`${booking.name}-${booking.day}-${booking.time}-${index}`}
+                  className={
+                    index < appointments.length - 1
+                      ? "border-b border-ink/10 px-4 py-4 sm:px-5"
+                      : "px-4 py-4 sm:px-5"
+                  }
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-ink">{booking.name}</p>
+                      <p className="mt-0.5 text-sm text-muted">
+                        {booking.service} · {booking.day} at {booking.time}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => cancelAppointmentFromList(booking)}
+                      className="shrink-0 rounded-lg border border-ink/15 bg-paper px-3 py-2 text-xs font-medium text-ink transition-colors hover:border-accent hover:text-accent"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </section>

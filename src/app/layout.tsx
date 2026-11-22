@@ -18,13 +18,19 @@ const publicSans = Public_Sans({
 export const metadata: Metadata = {
   title: "Sadaa: AI Voice Receptionist",
   description:
-    "An AI receptionist that answers every call, books appointments and takes messages — 24/7.",
+    "An AI receptionist that answers every call, books appointments and takes messages for local businesses.",
+  openGraph: {
+    title: "Sadaa: AI Voice Receptionist",
+    description:
+      "An AI receptionist that answers every call, books appointments and takes messages for local businesses.",
+  },
 };
 
 const navLinks = [
   { label: "How it works", href: "#how-it-works" },
   { label: "Live demo", href: "#live-demo" },
   { label: "Dashboard", href: "#dashboard" },
+  { label: "FAQ", href: "#faq" },
   { label: "Pricing", href: "#pricing" },
 ];
 
@@ -132,13 +138,36 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
 
         <footer className="border-t border-ink/10 bg-paper">
-          <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-2 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:px-6 lg:px-8">
             <p>
               <span className="font-display text-base font-semibold text-ink">
                 Sadaa
               </span>{" "}
               <span>Built by Muhammad Sarim</span>
             </p>
+            <nav
+              aria-label="Footer"
+              className="flex flex-wrap items-center gap-5"
+            >
+              <a
+                href="mailto:sarimarain99@gmail.com"
+                className="transition-colors hover:text-ink"
+              >
+                Email
+              </a>
+              <a
+                href="https://github.com/SarimArain99"
+                className="transition-colors hover:text-ink"
+              >
+                GitHub
+              </a>
+              <a
+                href="https://www.linkedin.com/in/muhammad-sarim-arain-b3795a2ba"
+                className="transition-colors hover:text-ink"
+              >
+                LinkedIn
+              </a>
+            </nav>
             <p>&copy; {new Date().getFullYear()} Sadaa</p>
           </div>
         </footer>
