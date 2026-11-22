@@ -362,6 +362,8 @@ export default function LiveDemo() {
     setMessages(INITIAL_MESSAGES);
     setNotice(null);
     setInput("");
+    storeDemoAppointments([]);
+    setAppointments([]);
   }
 
   return (
