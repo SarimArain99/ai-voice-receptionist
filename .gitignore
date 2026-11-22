@@ -1,0 +1,7 @@
+node_modules
+.next
+out
+.env*
+shots
+*.muse-github-snapshot-sync.json
+*.muse-github-snapshot-sync.json.tmp-*

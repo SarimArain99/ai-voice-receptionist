@@ -1,0 +1,76 @@
+/* Hallmark · theme: custom · genre: modern-minimal · posture: restrained · hero: corridor · nav: standard · footer: single-line · job: try the demo */
+/* Hallmark · pre-emit critique: P4 H4 E4 S3 R4 V5 · weakest: S, a voice receptionist hero could belong to any voice product; led with the live demo call transcript instead of a feature grid */
+/* Hallmark · waive 47b · one frame, real sample transcript inside · the demo call card is Sadaa's own call view, not a borrowed device shot */
+@import "tailwindcss";
+
+@theme inline {
+  --color-ink: #131a24;
+  --color-paper: #f6f3ec;
+  --color-accent: #8c2b3d;
+  --color-accent-ink: #f6f3ec;
+  --color-muted: #5a6472;
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-public-sans), system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+    overflow-wrap: break-word;
+    text-wrap: balance;
+  }
+
+  :where(a, button):active {
+    opacity: 0.85;
+  }
+
+  ::selection {
+    background-color: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+
+  html {
+    scrollbar-color: var(--color-muted) var(--color-paper);
+  }
+
+  :where(input, textarea, select) {
+    caret-color: var(--color-accent);
+  }
+
+  :where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
